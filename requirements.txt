@@ -1,0 +1,6 @@
+torch
+transformers
+safetensors
+pytest
+fastapi
+uvicorn[standard]
