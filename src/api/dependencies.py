@@ -6,6 +6,8 @@ from src.model.predictor import ModerationModel
 @lru_cache
 def get_moderation_model() -> ModerationModel:
     """
-    Load the real moderation model once and reuse it.
+    Load one model per application process
+    and reuse it for inference requests.
     """
+
     return ModerationModel()

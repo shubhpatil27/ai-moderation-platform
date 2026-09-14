@@ -16,45 +16,60 @@ def moderate(
     preferences: Dict[str, bool],
     thresholds: Dict[str, float] | None = None,
 ) -> Dict:
-    """
-    Convert model scores into a moderation decision
-    using the user's personal moderation preferences.
-    """
 
-    thresholds = thresholds or DEFAULT_THRESHOLDS
+    thresholds = (
+        thresholds
+        or DEFAULT_THRESHOLDS
+    )
 
     review_categories: List[str] = []
     hide_categories: List[str] = []
 
     for category, score in scores.items():
 
-        # Does this user want protection from this category?
-        enabled = preferences.get(category, False)
+        enabled = preferences.get(
+            category,
+            False,
+        )
 
         if not enabled:
             continue
 
-        threshold = thresholds.get(category, 0.80)
+        threshold = thresholds.get(
+            category,
+            0.80,
+        )
 
-        # Strong prediction -> hide
         if score >= threshold:
-            hide_categories.append(category)
 
-        # Somewhat suspicious -> human/user review
+            hide_categories.append(
+                category
+            )
+
         elif score >= threshold * 0.70:
-            review_categories.append(category)
+
+            review_categories.append(
+                category
+            )
+
 
     if hide_categories:
+
         return {
             "decision": "hide",
-            "triggered_categories": hide_categories,
+            "triggered_categories":
+                hide_categories,
         }
 
+
     if review_categories:
+
         return {
             "decision": "review",
-            "triggered_categories": review_categories,
+            "triggered_categories":
+                review_categories,
         }
+
 
     return {
         "decision": "allow",
