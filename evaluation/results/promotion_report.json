@@ -1,0 +1,74 @@
+{
+  "timestamp_utc": "2026-09-16T19:10:53.167273+00:00",
+  "baseline_runtime": "onnx_fp32",
+  "candidate_runtime": "onnx_int8",
+  "overall_pass": true,
+  "quality": {
+    "macro_f1": {
+      "baseline": 0.8476891098468835,
+      "candidate": 0.846481312144903,
+      "drop": 0.0012077977019805397,
+      "maximum_allowed_drop": 0.005,
+      "passed": true
+    },
+    "macro_recall": {
+      "baseline": 0.8564118959247641,
+      "candidate": 0.8524317481622193,
+      "drop": 0.003980147762544739,
+      "maximum_allowed_drop": 0.01,
+      "passed": true
+    },
+    "categories": {
+      "toxic": {
+        "baseline_f1": 0.9696092619392185,
+        "candidate_f1": 0.9680232558139535,
+        "f1_drop": 0.0015860061252649382,
+        "passed": true
+      },
+      "severe_toxic": {
+        "baseline_f1": 0.5443213296398892,
+        "candidate_f1": 0.5401662049861495,
+        "f1_drop": 0.0041551246537396835,
+        "passed": true
+      },
+      "obscene": {
+        "baseline_f1": 0.9481792717086834,
+        "candidate_f1": 0.9476635514018692,
+        "f1_drop": 0.000515720306814238,
+        "passed": true
+      },
+      "threat": {
+        "baseline_f1": 0.8690476190476191,
+        "candidate_f1": 0.8712273641851107,
+        "f1_drop": -0.00217974513749164,
+        "passed": true
+      },
+      "insult": {
+        "baseline_f1": 0.9209346235544017,
+        "candidate_f1": 0.9197734780556867,
+        "f1_drop": 0.0011611454987150438,
+        "passed": true
+      },
+      "identity_hate": {
+        "baseline_f1": 0.8340425531914893,
+        "candidate_f1": 0.8320340184266478,
+        "f1_drop": 0.0020085347648415297,
+        "passed": true
+      }
+    }
+  },
+  "performance": {
+    "baseline_ms_per_comment": 38.961261779999994,
+    "candidate_ms_per_comment": 16.262081799999986,
+    "speedup": 2.3958348174094186,
+    "minimum_required_speedup": 1.25,
+    "passed": true
+  },
+  "model_size": {
+    "baseline_mb": 417.85986328125,
+    "candidate_mb": 105.13698863983154,
+    "reduction_percent": 74.8391750731353,
+    "minimum_required_reduction_percent": 20.0,
+    "passed": true
+  }
+}

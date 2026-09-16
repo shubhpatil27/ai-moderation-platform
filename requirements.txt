@@ -8,3 +8,7 @@ sqlalchemy
 psycopg[binary]
 alembic
 python-dotenv
+onnx
+onnxruntime
+optimum[onnxruntime]
+mlflow

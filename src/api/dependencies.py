@@ -1,13 +1,39 @@
+import os
 from functools import lru_cache
-
-from src.model.predictor import ModerationModel
 
 
 @lru_cache
-def get_moderation_model() -> ModerationModel:
+def get_moderation_model():
     """
-    Load one model per application process
-    and reuse it for inference requests.
+    Load only the inference runtime that is actually configured.
+
+    MODEL_RUNTIME=onnx
+        -> ONNX Runtime only
+        -> PyTorch is never imported
+
+    MODEL_RUNTIME=pytorch
+        -> PyTorch model
     """
 
-    return ModerationModel()
+    runtime = os.getenv(
+        "MODEL_RUNTIME",
+        "pytorch",
+    ).lower()
+
+    if runtime == "onnx":
+        from src.model.onnx_predictor import (
+            ONNXModerationModel,
+        )
+
+        return ONNXModerationModel()
+
+    if runtime == "pytorch":
+        from src.model.predictor import (
+            ModerationModel,
+        )
+
+        return ModerationModel()
+
+    raise RuntimeError(
+        f"Unsupported MODEL_RUNTIME: {runtime}"
+    )

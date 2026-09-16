@@ -1,0 +1,15 @@
+{
+  "baseline_runtime": "onnx_fp32",
+  "candidate_runtime": "onnx_int8",
+
+  "quality_gates": {
+    "max_macro_f1_drop": 0.005,
+    "max_category_f1_drop": 0.01,
+    "max_macro_recall_drop": 0.01
+  },
+
+  "performance_gates": {
+    "min_speedup": 1.25,
+    "min_size_reduction_percent": 20.0
+  }
+}

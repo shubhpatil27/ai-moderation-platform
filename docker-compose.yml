@@ -1,4 +1,5 @@
 services:
+
   postgres:
     image: postgres:17
     container_name: moderation-postgres
@@ -15,10 +16,35 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U moderation_user -d moderation_db"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U moderation_user -d moderation_db"
+        ]
       interval: 5s
       timeout: 5s
       retries: 5
+
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+
+    container_name: moderation-api
+
+    environment:
+      DATABASE_URL: postgresql+psycopg://moderation_user:moderation_password@postgres:5432/moderation_db
+
+      MODEL_RUNTIME: onnx
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 
 volumes:
   postgres_data:
