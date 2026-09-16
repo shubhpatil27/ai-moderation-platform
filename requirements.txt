@@ -12,3 +12,4 @@ onnx
 onnxruntime
 optimum[onnxruntime]
 mlflow
+httpx2
