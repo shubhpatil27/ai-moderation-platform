@@ -1,4 +1,5 @@
 services:
+
   postgres:
     image: postgres:17
     container_name: moderation-postgres
@@ -36,8 +37,6 @@ services:
       DATABASE_URL: postgresql+psycopg://moderation_user:moderation_password@postgres:5432/moderation_db
       MODEL_RUNTIME: onnx
 
-    # Models stay outside the Docker image.
-    # Docker mounts the local models directory read-only.
     volumes:
       - ./models:/app/models:ro
 
@@ -49,5 +48,24 @@ services:
         condition: service_healthy
 
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: moderation-prometheus
+
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+    ports:
+      - "9090:9090"
+
+    depends_on:
+      - api
+
+
 volumes:
   postgres_data:
+  prometheus_data:

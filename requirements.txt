@@ -12,4 +12,5 @@ onnx
 onnxruntime
 optimum[onnxruntime]
 mlflow
-httpx2
+httpx2 
+prometheus-client
