@@ -1,5 +1,4 @@
 services:
-
   postgres:
     image: postgres:17
     container_name: moderation-postgres
@@ -35,8 +34,12 @@ services:
 
     environment:
       DATABASE_URL: postgresql+psycopg://moderation_user:moderation_password@postgres:5432/moderation_db
-
       MODEL_RUNTIME: onnx
+
+    # Models stay outside the Docker image.
+    # Docker mounts the local models directory read-only.
+    volumes:
+      - ./models:/app/models:ro
 
     ports:
       - "8000:8000"

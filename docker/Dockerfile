@@ -7,7 +7,10 @@ COPY requirements-api.txt .
 RUN pip install --no-cache-dir -r requirements-api.txt
 
 COPY src ./src
-COPY models/onnx ./models/onnx
+
+# Model artifacts are mounted at runtime.
+# They are not committed to Git or baked into this image.
+RUN mkdir -p /app/models/onnx /app/models/onnx_int8
 
 EXPOSE 8000
 
