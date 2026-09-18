@@ -1,3 +1,5 @@
+import time
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -20,6 +22,13 @@ from src.api.schemas import (
 from src.database import repository
 from src.database.db import get_db
 from src.model.policy import moderate
+from src.monitoring.metrics import (
+    MODEL_INFERENCE_DURATION_SECONDS,
+    MODEL_INFERENCE_TOTAL,
+    MODERATION_CATEGORY_FLAGS_TOTAL,
+    MODERATION_DECISIONS_TOTAL,
+    MODERATION_FEEDBACK_TOTAL,
+)
 
 
 router = APIRouter()
@@ -216,21 +225,12 @@ def moderate_comment(
     Moderate a comment using the configured ML runtime
     and the user's stored moderation preferences.
 
-    Flow:
+    Production metrics recorded here:
 
-    user_id + text
-        ↓
-    PostgreSQL preferences
-        ↓
-    ONNX/PyTorch model
-        ↓
-    category scores
-        ↓
-    personalized policy
-        ↓
-    allow / review / hide
-        ↓
-    store prediction
+    - inference count
+    - inference latency
+    - moderation decision count
+    - triggered toxicity categories
     """
 
     # --------------------------------------------------------
@@ -293,16 +293,65 @@ def moderate_comment(
 
 
     # --------------------------------------------------------
-    # 4. ML inference
+    # 4. Determine runtime label
     # --------------------------------------------------------
 
-    scores = model.predict(
-        request.text
+    runtime = getattr(
+        model,
+        "model_name",
+        "unknown",
     )
 
+    runtime_lower = (
+        str(runtime).lower()
+    )
+
+    if "int8" in runtime_lower:
+        runtime_label = "onnx_int8"
+
+    elif "onnx" in runtime_lower:
+        runtime_label = "onnx_fp32"
+
+    elif "torch" in runtime_lower:
+        runtime_label = "pytorch"
+
+    else:
+        runtime_label = "unknown"
+
 
     # --------------------------------------------------------
-    # 5. Personalized moderation policy
+    # 5. ML inference + inference metrics
+    # --------------------------------------------------------
+
+    inference_start = (
+        time.perf_counter()
+    )
+
+    try:
+        scores = model.predict(
+            request.text
+        )
+
+    finally:
+        inference_duration = (
+            time.perf_counter()
+            - inference_start
+        )
+
+        MODEL_INFERENCE_DURATION_SECONDS.labels(
+            runtime=runtime_label,
+        ).observe(
+            inference_duration
+        )
+
+
+    MODEL_INFERENCE_TOTAL.labels(
+        runtime=runtime_label,
+    ).inc()
+
+
+    # --------------------------------------------------------
+    # 6. Personalized moderation policy
     # --------------------------------------------------------
 
     result = moderate(
@@ -311,8 +360,37 @@ def moderate_comment(
     )
 
 
+    decision = str(
+        result["decision"]
+    ).lower()
+
+
     # --------------------------------------------------------
-    # 6. Store prediction
+    # 7. Record moderation decision metric
+    # --------------------------------------------------------
+
+    MODERATION_DECISIONS_TOTAL.labels(
+        decision=decision,
+    ).inc()
+
+
+    # --------------------------------------------------------
+    # 8. Record triggered toxicity categories
+    # --------------------------------------------------------
+
+    triggered_categories = result[
+        "triggered_categories"
+    ]
+
+    for category in triggered_categories:
+
+        MODERATION_CATEGORY_FLAGS_TOTAL.labels(
+            category=category,
+        ).inc()
+
+
+    # --------------------------------------------------------
+    # 9. Store prediction
     # --------------------------------------------------------
 
     prediction = (
@@ -333,7 +411,7 @@ def moderate_comment(
 
 
     # --------------------------------------------------------
-    # 7. Return response
+    # 10. Return response
     # --------------------------------------------------------
 
     return ModerationResponse(
@@ -341,9 +419,9 @@ def moderate_comment(
 
         decision=result["decision"],
 
-        triggered_categories=result[
-            "triggered_categories"
-        ],
+        triggered_categories=(
+            triggered_categories
+        ),
 
         scores=scores,
 
@@ -458,5 +536,13 @@ def create_feedback(
             request.corrected_category
         ),
     )
+
+
+    # --------------------------------------------------------
+    # 4. Record successful human feedback
+    # --------------------------------------------------------
+
+    MODERATION_FEEDBACK_TOTAL.inc()
+
 
     return feedback
