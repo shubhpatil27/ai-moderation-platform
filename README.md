@@ -1,52 +1,50 @@
 # 🛡️ AI Moderation Platform
 
-### Production-Oriented, Personalized AI Content Moderation with MLOps
+### Production-Oriented Personalized Content Moderation with End-to-End MLOps
 
-An end-to-end machine learning platform for **real-time toxic content moderation**, designed around a practical social-media use case:
+A production-oriented NLP platform for **real-time, personalized toxic-content moderation** built with FastAPI, Toxic-BERT, ONNX Runtime, PostgreSQL, MLflow, Docker, Prometheus, and Grafana.
 
-> Give users control over what kinds of harmful comments they want automatically filtered from posts, stories, streams, and other interactive content.
-
-This project goes beyond running a pretrained NLP model behind an API.
-
-It implements a complete ML systems workflow involving:
-
-- 🤖 Transformer-based toxicity classification
-- ⚡ ONNX Runtime inference optimization
-- 📦 INT8 model quantization
-- 🎛️ User-specific moderation preferences
-- 🌐 FastAPI model serving
-- 🐘 PostgreSQL persistence
-- 🐳 Dockerized deployment
-- 🧪 Automated testing
-- 🚦 Automated model promotion gates
-- 📊 MLflow experiment tracking
-- 🗂️ MLflow Model Registry
-- 👥 Human feedback collection
-- 🔥 Locust load testing
-- 📈 Reproducible benchmarking
-- 🔄 CI with GitHub Actions
+Instead of stopping at model inference, this project implements the surrounding ML lifecycle: **optimization, evaluation, automated promotion gates, model registry, CI, load testing, persistent feedback, and production-style observability.**
 
 ---
 
-# 🎯 Problem
+## 🚀 Highlights
 
-Social platforms process enormous volumes of comments in real time.
+| Capability | Result |
+|---|---|
+| ⚡ Inference optimization | **5.60× faster** INT8 inference vs. PyTorch FP32 in local CPU benchmark |
+| 📦 Model compression | **417.86 MB → 105.14 MB** (**74.84% smaller**) |
+| 🎯 Quality preservation | Macro F1 **0.8477 → 0.8465** after INT8 quantization |
+| 🧪 Evaluation | Deterministic **5,000-comment** FP32 vs. INT8 evaluation |
+| 🚦 Model safety | Automated quality, latency, and size **promotion gates** |
+| 🧬 Model lifecycle | MLflow experiment tracking + Model Registry + aliases |
+| 📈 Load testing | **2,178 requests, 0 failures** in a 25-user ONNX test |
+| 📊 Observability | Prometheus + Grafana for API, inference, and moderation telemetry |
+| 🔄 CI | GitHub Actions runs automated tests and Docker builds |
+| 🎛️ Personalization | Per-user moderation policies stored in PostgreSQL |
+| 👥 Feedback loop | Predictions and human corrections persisted for future improvement |
 
-Traditional moderation systems often make a single platform-wide decision:
+> Benchmark and load-test results are measurements from the local test environment and should not be interpreted as universal hardware-independent performance claims.
+
+---
+
+# 🎯 The Problem
+
+Most automated moderation systems make one platform-wide decision:
 
 ```text
 Comment
    ↓
-Moderation System
+Moderation Model
    ↓
 ALLOW / HIDE
 ```
 
-But different users may have different preferences.
+But moderation preferences are not necessarily identical across users.
 
-One creator may want insults automatically hidden while another may only want threats or severe toxicity filtered.
+One creator may want insults filtered automatically, while another may only want threats and severe toxicity hidden.
 
-This project explores a more personalized architecture:
+This platform separates **ML prediction** from **product policy**:
 
 ```text
                          User Preferences
@@ -56,25 +54,86 @@ Incoming Comment → Toxicity Model → Policy Engine
                               ALLOW / REVIEW / HIDE
 ```
 
-The ML model estimates toxicity categories.
+The model estimates toxicity probabilities.
 
-The **policy layer decides what those predictions mean for a particular user**.
+The policy engine determines how those predictions affect a particular user.
 
-This separation allows moderation behavior to change without retraining the underlying model every time a user changes a preference.
+That means moderation behavior can change without retraining the underlying Transformer every time a user changes a preference.
 
 ---
 
-# 🧠 ML Model
+# 🏗️ System Architecture
 
-The platform uses:
+```text
+                              Client
+                                │
+                                ▼
+                         ┌─────────────┐
+                         │   FastAPI   │
+                         └──────┬──────┘
+                                │
+                 ┌──────────────┴──────────────┐
+                 │                             │
+                 ▼                             ▼
+          ┌─────────────┐               ┌─────────────┐
+          │ PostgreSQL  │               │ Toxic-BERT  │
+          │             │               │ ONNX Runtime│
+          │ Users       │               │ CPU         │
+          │ Preferences │               └──────┬──────┘
+          │ Predictions │                      │
+          │ Feedback    │                      ▼
+          └─────────────┘               ┌─────────────┐
+                                        │Policy Engine│
+                                        └──────┬──────┘
+                                               │
+                                               ▼
+                                      ALLOW / REVIEW / HIDE
+                                               │
+                                               ▼
+                                          /metrics
+                                               │
+                                               ▼
+                                         Prometheus
+                                               │
+                                               ▼
+                                            Grafana
+```
 
-**`unitary/toxic-bert`**
+The ML lifecycle runs alongside the serving architecture:
 
-for multi-label toxicity classification.
+```text
+PyTorch Baseline
+       ↓
+ONNX Export
+       ↓
+INT8 Quantization
+       ↓
+Quality Evaluation
+       ↓
+Performance Benchmark
+       ↓
+Automated Promotion Gate
+       ↓
+MLflow Experiment Tracking
+       ↓
+MLflow Model Registry
+       ↓
+@candidate
+       ↓
+Gated Promotion
+       ↓
+@production
+```
 
-The model produces probabilities for six categories:
+---
 
-| Category | Meaning |
+# 🧠 Toxicity Model
+
+The platform uses **`unitary/toxic-bert`** for multi-label toxicity classification.
+
+It produces probabilities for six categories:
+
+| Category | Description |
 |---|---|
 | `toxic` | General toxic language |
 | `severe_toxic` | Extremely toxic language |
@@ -83,7 +142,7 @@ The model produces probabilities for six categories:
 | `insult` | Insulting language |
 | `identity_hate` | Identity-targeted hateful language |
 
-Example model output:
+Example:
 
 ```json
 {
@@ -96,13 +155,13 @@ Example model output:
 }
 ```
 
-The model output is deliberately separated from the final moderation policy.
+The probabilities are not themselves the final product decision. They are passed to the personalized policy layer.
 
 ---
 
 # 🎛️ Personalized Moderation
 
-Users have individual moderation preferences stored in PostgreSQL.
+Each user has configurable moderation preferences stored in PostgreSQL.
 
 Example:
 
@@ -117,102 +176,59 @@ Example:
 }
 ```
 
-This means two users can receive the **same model prediction** while getting different moderation outcomes.
-
-Conceptually:
+Therefore two users can receive the same model prediction while receiving different moderation outcomes.
 
 ```text
-                  Toxicity Model
-                       ↓
-              Category Probabilities
-                       ↓
-              User Preferences
-                       ↓
-                 Policy Engine
-                       ↓
-             ALLOW / REVIEW / HIDE
+Toxicity Scores
+      +
+User Preferences
+      ↓
+ Policy Engine
+      ↓
+ALLOW / REVIEW / HIDE
 ```
 
-This makes the system suitable as the backend for a future social-media setting such as:
-
-> “Automatically filter harmful comments according to my preferences.”
-
----
-
-# 🏗️ System Architecture
+This design separates:
 
 ```text
-                           ┌───────────────────┐
-                           │      Client       │
-                           │ Social / Web App  │
-                           └─────────┬─────────┘
-                                     │
-                                     ▼
-                           ┌───────────────────┐
-                           │      FastAPI      │
-                           │   REST Service    │
-                           └─────────┬─────────┘
-                                     │
-                    ┌────────────────┴────────────────┐
-                    │                                 │
-                    ▼                                 ▼
-          ┌──────────────────┐              ┌──────────────────┐
-          │    PostgreSQL    │              │  ML Inference    │
-          │                  │              │                  │
-          │ Users            │              │ Toxic-BERT       │
-          │ Preferences      │              │ ONNX Runtime     │
-          │ Predictions      │              │ CPU Inference    │
-          │ Feedback         │              └────────┬─────────┘
-          └──────────────────┘                       │
-                                                    ▼
-                                          ┌──────────────────┐
-                                          │  Policy Engine   │
-                                          │                  │
-                                          │ User Preferences │
-                                          │ + ML Scores      │
-                                          └────────┬─────────┘
-                                                   │
-                                                   ▼
-                                          ALLOW / REVIEW / HIDE
+ML prediction ≠ product decision
 ```
 
 ---
 
-# 🔄 Request Flow
-
-A moderation request travels through the system as follows:
+# 🔄 Moderation Request Flow
 
 ```text
 POST /moderate
       ↓
 Validate request
       ↓
-Load user from PostgreSQL
+Load user
       ↓
-Load user's moderation preferences
+Load moderation preferences
       ↓
 Tokenize comment
       ↓
-Run Toxic-BERT inference
+ONNX inference
       ↓
-Generate six toxicity probabilities
+Six toxicity probabilities
       ↓
-Apply personalized moderation policy
+Personalized policy
       ↓
-Store prediction in PostgreSQL
+ALLOW / REVIEW / HIDE
       ↓
-Return decision
+Persist prediction
+      ↓
+Record Prometheus telemetry
+      ↓
+Return response
 ```
-
-This is an end-to-end ML-backed application rather than an isolated notebook experiment.
 
 ---
 
 # ⚡ Model Optimization
 
-One of the central engineering goals was reducing inference latency.
-
-The project therefore evaluates three inference configurations:
+The project evaluates three inference configurations:
 
 ```text
 PyTorch FP32
@@ -222,17 +238,15 @@ ONNX FP32
 ONNX INT8
 ```
 
-Rather than assuming optimization helped, each stage was benchmarked.
+Each optimization stage is measured rather than assumed to be beneficial.
 
 ---
 
-# 🚀 PyTorch → ONNX Runtime
+## 🚀 PyTorch → ONNX Runtime
 
-The original Transformer model was exported from PyTorch to ONNX.
+The original Transformer was exported from PyTorch to ONNX.
 
-Prediction sanity checks were performed between the two runtimes before benchmarking.
-
-For the tested comments, the returned probabilities matched at the four-decimal precision exposed by the predictor.
+Prediction sanity checks were performed before benchmarking.
 
 Example:
 
@@ -247,23 +261,21 @@ insult                 0.9573      0.9573
 identity_hate          0.0133      0.0133
 ```
 
-This provided a basic correctness check before treating ONNX as an optimization candidate.
+For these test inputs, outputs matched at the four-decimal precision displayed by the comparison script.
 
 ---
 
-# 📊 Model Runtime Benchmark
+# 📊 Runtime Benchmark
 
-A reproducible local CPU benchmark compares the inference runtimes.
-
-One measured run produced:
+One reproducible local CPU benchmark produced:
 
 | Runtime | Average | p50 | p95 | p99 |
 |---|---:|---:|---:|---:|
 | PyTorch FP32 | 38.34 ms | 36.61 ms | 43.62 ms | 73.24 ms |
 | ONNX FP32 | 15.88 ms | 14.31 ms | 23.29 ms | 25.71 ms |
-| ONNX INT8 | **6.84 ms** | **5.86 ms** | **10.71 ms** | **14.15 ms** |
+| **ONNX INT8** | **6.84 ms** | **5.86 ms** | **10.71 ms** | **14.15 ms** |
 
-Observed speedups in that run:
+Observed speedups:
 
 ```text
 ONNX FP32 vs PyTorch  → 2.41×
@@ -271,9 +283,7 @@ ONNX INT8 vs PyTorch → 5.60×
 ONNX INT8 vs FP32    → 2.32×
 ```
 
-These measurements are environment-specific local CPU benchmark results and are not intended as universal performance claims.
-
-Benchmark results are automatically written to:
+Benchmark results are stored in machine-readable form:
 
 ```text
 benchmarks/raw/model_runtime.csv
@@ -283,9 +293,7 @@ benchmarks/raw/model_runtime.csv
 
 # 📦 INT8 Quantization
 
-The ONNX model was dynamically quantized from FP32 to INT8.
-
-Measured artifact sizes:
+Dynamic INT8 quantization reduced the ONNX artifact from:
 
 ```text
 ONNX FP32
@@ -297,30 +305,24 @@ ONNX INT8
 105.14 MB
 ```
 
-### Model size reduction
-
-**74.84%**
-
 | Model | Size |
 |---|---:|
 | ONNX FP32 | 417.86 MB |
-| ONNX INT8 | **105.14 MB** |
+| **ONNX INT8** | **105.14 MB** |
 
-But a smaller and faster model is not automatically a better production model.
+### **74.84% model-size reduction**
 
-Quantization can change predictions.
+However, faster and smaller does not automatically mean production-ready.
 
-Therefore the INT8 model had to pass a proper quality evaluation before promotion.
+Quantization can alter predictions, so the INT8 model must pass quality evaluation before promotion.
 
 ---
 
-# 🧪 Model Quality Evaluation
+# 🧪 5,000-Comment Quality Evaluation
 
 A deterministic **5,000-comment evaluation subset** was constructed from the Jigsaw Toxic Comment dataset.
 
 The subset intentionally preserves positive examples for rare toxicity categories.
-
-Evaluation coverage:
 
 | Category | Positive Examples |
 |---|---:|
@@ -331,13 +333,13 @@ Evaluation coverage:
 | Insult | 2,028 |
 | Identity Hate | 726 |
 
-Both ONNX FP32 and ONNX INT8 were evaluated on the **same comments**.
+Both ONNX FP32 and INT8 are evaluated against the **same comments**.
+
+> The evaluation subset intentionally oversamples positive/rare labels. These metrics characterize the controlled FP32-vs-INT8 comparison set rather than natural production class prevalence.
 
 ---
 
-# 📈 FP32 vs INT8 Quality
-
-Measured F1 scores:
+# 📈 FP32 vs. INT8 Quality
 
 | Category | FP32 F1 | INT8 F1 | Change |
 |---|---:|---:|---:|
@@ -356,15 +358,13 @@ Aggregate metrics:
 | Macro Recall | **0.8564** | 0.8524 |
 | Macro F1 | **0.8477** | 0.8465 |
 
-### Macro F1 change
+### Macro F1 degradation: **0.0012**
 
 ```text
 0.8477 → 0.8465
-
-Absolute change ≈ -0.0012
 ```
 
-The evaluation pipeline automatically stores:
+Evaluation artifacts:
 
 ```text
 evaluation/results/
@@ -374,17 +374,13 @@ evaluation/results/
 └── predictions.csv
 ```
 
-> The 5,000-row set intentionally oversamples positive/rare labels, so these metrics characterize the controlled comparison set rather than natural production class prevalence.
-
 ---
 
 # 🚦 Automated Model Promotion Gate
 
-The project does not promote a model merely because it is faster.
+A candidate is not promoted simply because it is faster.
 
-Every candidate must pass configurable quality and performance requirements.
-
-The promotion configuration includes rules such as:
+The promotion system enforces explicit version-controlled requirements:
 
 ```json
 {
@@ -408,45 +404,41 @@ MODEL PROMOTION REPORT
 Baseline : onnx_fp32
 Candidate: onnx_int8
 
-QUALITY GATES
+QUALITY
+Macro F1             PASS   drop=0.0012
+Macro Recall         PASS   drop=0.0040
 
-Macro F1       PASS
-Macro Recall   PASS
+CATEGORY F1
+toxic                PASS
+severe_toxic         PASS
+obscene              PASS
+threat               PASS
+insult               PASS
+identity_hate        PASS
 
-Category F1:
+PERFORMANCE
+Speedup              PASS   2.40×
 
-toxic             PASS
-severe_toxic      PASS
-obscene           PASS
-threat            PASS
-insult            PASS
-identity_hate     PASS
+MODEL SIZE
+Reduction            PASS   74.84%
 
-PERFORMANCE GATE
-
-Speedup            PASS   2.40×
-
-MODEL SIZE GATE
-
-Size reduction     PASS   74.84%
-
-OVERALL: PASS
+OVERALL              PASS
 ```
 
-The promotion script returns:
+The script exposes CI-compatible exit codes:
 
 ```text
-exit code 0 → PASS
-exit code 1 → FAIL
+0 → candidate passed
+1 → candidate failed
 ```
 
-This makes the same model-quality gate usable inside automated CI/CD pipelines.
+This means the same quality gate can block future model releases automatically.
 
 ---
 
 # 🧬 MLflow Experiment Tracking
 
-Model experiments are tracked using **MLflow**.
+MLflow tracks model experiments instead of relying on manually copied benchmark numbers.
 
 Tracked information includes:
 
@@ -468,67 +460,39 @@ macro_precision
 macro_recall
 macro_f1
 
-toxic_precision
-toxic_recall
-toxic_f1
+per-category precision
+per-category recall
+per-category F1
 
-severe_toxic_precision
-severe_toxic_recall
-severe_toxic_f1
-
-...
-
-evaluation_ms_per_comment
-model_size_mb
+evaluation latency
+model size
 ```
 
 ### Artifacts
 
 ```text
-evaluation metrics
+evaluation reports
 benchmark results
-comparison reports
+comparison files
 model artifacts
 promotion reports
 ```
 
-This allows FP32 and INT8 experiments to be compared through the MLflow UI instead of relying on manually recorded results.
+This provides reproducible comparison between FP32 and INT8 experiments.
 
 ---
 
-# 🗂️ MLflow Model Registry
+# 🗂️ Model Registry & Production Promotion
 
-A candidate model is registered only after passing the promotion gate.
-
-The approved INT8 model is registered as:
+The approved model is registered as:
 
 ```text
 toxicity-moderation-model
 ```
 
-with a versioned lifecycle:
+The model lifecycle is:
 
 ```text
-Model:
-toxicity-moderation-model
-
-Version:
-v1
-
-Alias:
-candidate
-
-Promotion Gate:
-PASSED
-```
-
-Conceptually:
-
-```text
-Experiment
-    ↓
-Candidate Model
-    ↓
 Evaluation
     ↓
 Promotion Gate
@@ -537,32 +501,46 @@ PASS
     ↓
 MLflow Model Registry
     ↓
-toxicity-moderation-model
+Version 1
     ↓
-Versioned Candidate
+@candidate
+    ↓
+Gated Production Promotion
+    ↓
+@production
 ```
+
+The production promotion script verifies that the candidate contains:
+
+```text
+promotion_gate = PASSED
+```
+
+before assigning the production alias.
 
 This provides traceability between:
 
 ```text
 Model Artifact
-     ↕
+      ↕
 Experiment
-     ↕
-Metrics
-     ↕
+      ↕
+Evaluation Metrics
+      ↕
 Promotion Decision
-     ↕
+      ↕
 Registered Version
+      ↕
+Production Alias
 ```
 
 ---
 
 # 🔥 Load Testing with Locust
 
-The API was load-tested using **Locust** to measure behavior under concurrent traffic.
+The API was tested under concurrent traffic using Locust.
 
-A 25-user ONNX FP32 test produced:
+### 25-user ONNX FP32 run
 
 ```text
 Requests:       2,178
@@ -576,7 +554,7 @@ p99:            220 ms
 Current RPS:    ~19.9
 ```
 
-A prior PyTorch run under the same intended workload produced:
+A prior PyTorch run under the intended comparison workload produced:
 
 ```text
 Median:         120 ms
@@ -587,7 +565,7 @@ RPS:            ~17.6
 Failures:       0
 ```
 
-Observed local end-to-end latency improvements included approximately:
+Observed local end-to-end latency improvements:
 
 ```text
 Average latency ↓ ~72.6%
@@ -596,15 +574,77 @@ p95 latency     ↓ ~74.4%
 p99 latency     ↓ ~67.2%
 ```
 
-These are local load-test observations and depend on hardware, workload, concurrency configuration, container state, and other environmental factors.
+These results depend on hardware, concurrency, container state, workload, and runtime configuration.
+
+---
+
+# 📊 Production-Style Observability
+
+The running application exposes both **traditional service telemetry and ML-specific telemetry** through Prometheus.
+
+Grafana then visualizes the metrics through a provisioned dashboard.
+
+![AI Moderation Platform Grafana Dashboard](./assets/grafana-dashboard.png)
+
+### Dashboard Coverage
+
+The dashboard monitors:
+
+- **API request rate**
+- **Traffic by endpoint**
+- **Average model inference latency**
+- **p95 model inference latency**
+- **ONNX runtime latency over time**
+- **Moderation decisions** (`allow`, `review`, `hide`)
+- **Triggered toxicity categories**
+- **Human feedback submissions**
+- **p95 API latency**
+- **HTTP responses by status code**
+
+The monitoring path is:
+
+```text
+FastAPI
+   │
+   ├── HTTP telemetry
+   ├── inference telemetry
+   ├── moderation telemetry
+   └── feedback telemetry
+            ↓
+         /metrics
+            ↓
+       Prometheus
+            ↓
+         Grafana
+            ↓
+   Live MLOps Dashboard
+```
+
+This creates visibility into both:
+
+```text
+SYSTEM HEALTH
+request rate
+latency
+status codes
+
+       +
+
+MODEL / PRODUCT BEHAVIOR
+inference latency
+runtime
+moderation decisions
+toxicity categories
+human feedback
+```
+
+The Grafana datasource and dashboard are provisioned from configuration files, allowing the monitoring environment to be recreated rather than configured manually.
 
 ---
 
 # 🐘 PostgreSQL Persistence
 
-The platform stores more than predictions.
-
-The database supports:
+The application persists:
 
 ```text
 Users
@@ -629,7 +669,7 @@ Human Feedback
 Future Evaluation / Retraining Data
 ```
 
-Database schema evolution is managed with **Alembic migrations**.
+Database schema evolution is managed using **Alembic migrations**.
 
 ---
 
@@ -637,21 +677,21 @@ Database schema evolution is managed with **Alembic migrations**.
 
 Predictions receive persistent IDs.
 
-Users or moderators can submit corrections such as:
+Users or moderators can submit corrections:
 
 ```text
 Prediction
      ↓
-Was the moderation decision correct?
+Human Review
      ↓
-Feedback
+Corrected Decision / Category
      ↓
-Corrected decision/category
+PostgreSQL
      ↓
-Stored in PostgreSQL
+Future Error Analysis / Retraining
 ```
 
-This creates the foundation for future:
+This creates the foundation for:
 
 - error analysis
 - active learning
@@ -659,7 +699,7 @@ This creates the foundation for future:
 - drift investigation
 - model improvement
 
-The goal is to design the system as a **learning ML platform**, not a static inference endpoint.
+The application is therefore structured as a **learning ML system**, not only a stateless inference endpoint.
 
 ---
 
@@ -667,11 +707,13 @@ The goal is to design the system as a **learning ML platform**, not a static inf
 
 FastAPI provides the serving layer.
 
-Core endpoints include:
+Core endpoints:
 
 ```text
+GET  /
 GET  /health
 GET  /ready
+GET  /metrics
 
 POST /users
 
@@ -685,7 +727,7 @@ GET  /predictions/{prediction_id}
 POST /feedback
 ```
 
-Interactive Swagger documentation is available locally at:
+Interactive Swagger documentation:
 
 ```text
 http://127.0.0.1:8000/docs
@@ -693,27 +735,21 @@ http://127.0.0.1:8000/docs
 
 ---
 
-# ❤️ Liveness vs Readiness
+# ❤️ Liveness vs. Readiness
 
-The platform distinguishes:
+The platform distinguishes between process health and model-serving readiness.
 
-```text
-/health
-```
+### `/health`
 
-from:
-
-```text
-/ready
-```
-
-`/health` answers:
+Answers:
 
 > Is the API process alive?
 
-`/ready` answers:
+### `/ready`
 
-> Is the inference system actually ready to serve requests?
+Answers:
+
+> Is the inference system actually ready to process requests?
 
 Example:
 
@@ -725,43 +761,42 @@ Example:
 }
 ```
 
-This distinction becomes important when deploying ML services behind orchestration/load-balancing infrastructure.
+This distinction is important for production service orchestration and health checks.
 
 ---
 
-# 🐳 Docker Architecture
+# 🐳 Containerized Architecture
 
-The application is containerized with Docker.
-
-Local services include:
+Docker Compose runs the local platform as four services:
 
 ```text
 Docker Compose
 │
 ├── moderation-api
 │
-└── moderation-postgres
+├── moderation-postgres
+│
+├── moderation-prometheus
+└── moderation-grafana
 ```
 
-Model artifacts are separated from the application image and mounted read-only at runtime:
+Model artifacts are intentionally separated from the application image and mounted read-only at runtime:
 
 ```text
 Application Image
        +
-Model Artifact
+Approved Model Artifact
        ↓
 Running ML Service
 ```
 
-This prevents every application-code change from requiring the model binary to be rebuilt into the image.
+This prevents large model binaries from bloating Git history or forcing every application-code change to rebuild the model into the image.
 
 ---
 
 # 🔌 Runtime Abstraction
 
-The serving architecture separates the API from the underlying inference runtime.
-
-Conceptually:
+The API is separated from the underlying inference implementation:
 
 ```text
 FastAPI
@@ -771,31 +806,31 @@ get_moderation_model()
 MODEL_RUNTIME
    │
    ├── PyTorch
-   │
    └── ONNX
 ```
 
-Lazy imports prevent the lightweight ONNX production container from requiring PyTorch.
+Lazy imports allow the production ONNX container to avoid requiring PyTorch.
 
-This keeps serving dependencies smaller and separates development/export dependencies from production inference dependencies.
+This separates development/export dependencies from serving dependencies and keeps the inference image focused on the runtime it actually needs.
 
 ---
 
 # 🧪 Automated Testing
 
-The project includes tests for:
+The project includes tests covering:
 
-- health checks
+- API root
+- health
 - readiness
 - safe-comment moderation
 - toxic-comment moderation
 - request validation
 - unknown users
 - user creation
-- moderation preferences
+- user preferences
 - policy behavior
 
-Current local test suite:
+Current suite:
 
 ```text
 13 passed
@@ -809,59 +844,57 @@ python -m pytest -v
 
 ---
 
-# 🔄 Continuous Integration
+# 🔄 GitHub Actions CI
 
-GitHub Actions runs CI automatically on pushes and pull requests.
-
-The software CI pipeline performs:
+Every push and pull request runs a clean CI pipeline:
 
 ```text
 Git Push / Pull Request
           ↓
-      Checkout
+       Checkout
           ↓
-    Python 3.13
+     Python 3.13
           ↓
  Install Dependencies
           ↓
-       pytest
+        pytest
           ↓
-     Docker Build
+    Docker Build
           ↓
-      PASS / FAIL
+       PASS / FAIL
 ```
 
-The project deliberately distinguishes between:
+The project deliberately separates the **software release lifecycle** from the **model lifecycle**.
 
 ### Software CI
 
 ```text
-code
- ↓
-tests
- ↓
-container build
+Application Code
+      ↓
+Automated Tests
+      ↓
+Docker Build
 ```
 
-and:
-
-### Model Release Lifecycle
+### Model Lifecycle
 
 ```text
-candidate model
+Candidate Model
       ↓
-evaluation
+Evaluation
       ↓
-performance benchmark
+Benchmarking
       ↓
-promotion gate
+Promotion Gate
       ↓
-MLflow registry
+Model Registry
       ↓
-deployment candidate
+@candidate
+      ↓
+@production
 ```
 
-Application code and ML models are related, but they do not necessarily have identical release lifecycles.
+This reflects an important MLOps principle: application code and model artifacts are related, but they do not necessarily share the same release lifecycle.
 
 ---
 
@@ -870,7 +903,7 @@ Application code and ML models are related, but they do not necessarily have ide
 | Area | Technology |
 |---|---|
 | Language | Python 3.13 |
-| NLP Model | Toxic-BERT |
+| NLP | Toxic-BERT |
 | Transformers | Hugging Face Transformers |
 | Baseline Runtime | PyTorch |
 | Optimized Runtime | ONNX Runtime |
@@ -881,9 +914,11 @@ Application code and ML models are related, but they do not necessarily have ide
 | ORM | SQLAlchemy |
 | Migrations | Alembic |
 | Containers | Docker / Docker Compose |
-| Load Testing | Locust |
 | Experiment Tracking | MLflow |
 | Model Registry | MLflow Model Registry |
+| Monitoring | Prometheus |
+| Dashboards | Grafana |
+| Load Testing | Locust |
 | Evaluation | scikit-learn |
 | Data Processing | pandas |
 | Testing | pytest |
@@ -903,6 +938,9 @@ ai-moderation-platform/
 ├── alembic/
 │   └── versions/
 │
+├── assets/
+│   └── grafana-dashboard.png
+│
 ├── benchmarks/
 │   └── raw/
 │
@@ -913,14 +951,23 @@ ai-moderation-platform/
 │   └── Dockerfile
 │
 ├── evaluation/
-│   ├── data/                 # ignored downloaded datasets
+│   ├── data/                    # ignored downloaded dataset
 │   └── results/
 │
 ├── load_tests/
 │   ├── locustfile.py
 │   └── test_comments.json
 │
-├── models/                   # ignored local model artifacts
+├── monitoring/
+│   ├── prometheus.yml
+│   └── grafana/
+│       ├── dashboards/
+│       │   └── moderation-dashboard.json
+│       └── provisioning/
+│           ├── dashboards/
+│           └── datasources/
+│
+├── models/                      # ignored local model artifacts
 │   ├── onnx/
 │   └── onnx_int8/
 │
@@ -934,26 +981,15 @@ ai-moderation-platform/
 │   ├── evaluate_models.py
 │   ├── export_onnx.py
 │   ├── log_mlflow_experiments.py
+│   ├── promote_to_production.py
 │   ├── quantize_onnx.py
 │   └── register_model.py
 │
 ├── src/
 │   ├── api/
-│   │   ├── dependencies.py
-│   │   ├── main.py
-│   │   ├── routes.py
-│   │   └── schemas.py
-│   │
 │   ├── database/
-│   │   ├── db.py
-│   │   ├── models.py
-│   │   └── repository.py
-│   │
-│   └── model/
-│       ├── predictor.py
-│       ├── onnx_predictor.py
-│       ├── onnx_int8_predictor.py
-│       └── policy.py
+│   ├── model/
+│   └── monitoring/
 │
 ├── tests/
 │
@@ -966,16 +1002,16 @@ ai-moderation-platform/
 
 ---
 
-# ▶️ Local Development
+# ▶️ Getting Started
 
-## Clone
+## 1. Clone
 
 ```bash
 git clone <repository-url>
 cd ai-moderation-platform
 ```
 
-## Create environment
+## 2. Create a virtual environment
 
 Windows:
 
@@ -990,21 +1026,13 @@ Install dependencies:
 python -m pip install -r requirements.txt
 ```
 
----
-
-# 🧪 Run Tests
-
-```bash
-python -m pytest -v
-```
+> Large model artifacts and local environment configuration are intentionally excluded from Git. Model export/quantization scripts are provided to reproduce the artifacts.
 
 ---
 
-# 🐳 Start Services
+# 🐳 Start the Platform
 
 Make sure Docker Desktop is running.
-
-Then:
 
 ```bash
 docker compose up -d
@@ -1016,40 +1044,72 @@ Check:
 docker compose ps
 ```
 
-The expected services are:
+Expected services:
 
 ```text
-moderation-postgres
 moderation-api
+moderation-postgres
+moderation-prometheus
+moderation-grafana
 ```
+
+Local interfaces:
+
+| Service | URL |
+|---|---|
+| Swagger API | `http://127.0.0.1:8000/docs` |
+| Prometheus Metrics | `http://127.0.0.1:8000/metrics` |
+| Prometheus | `http://127.0.0.1:9090` |
+| Grafana | `http://127.0.0.1:3000` |
+| MLflow UI | `http://127.0.0.1:5000` when started |
 
 ---
 
-# 📊 Run Model Benchmarks
+# 🧪 Run Tests
 
 ```bash
-python -m scripts.benchmark
-```
-
-Results are automatically appended to:
-
-```text
-benchmarks/raw/model_runtime.csv
+python -m pytest -v
 ```
 
 ---
 
-# 📦 Quantize ONNX Model
+# ⚡ Export & Optimize the Model
+
+Export to ONNX:
+
+```bash
+python -m scripts.export_onnx
+```
+
+Compare PyTorch and ONNX predictions:
+
+```bash
+python -m scripts.compare_runtimes
+```
+
+Quantize:
 
 ```bash
 python -m scripts.quantize_onnx
+```
+
+Compare FP32 and INT8:
+
+```bash
+python -m scripts.compare_quantization
+```
+
+Benchmark:
+
+```bash
+python -m scripts.benchmark
 ```
 
 ---
 
 # 🧪 Evaluate Model Quality
 
-Download/build evaluation data:
+Prepare evaluation data:
 
 ```bash
 python -m scripts.download_eval_data
@@ -1064,21 +1124,20 @@ python -m scripts.evaluate_models
 
 ---
 
-# 🚦 Run Promotion Gate
+# 🚦 Run the Promotion Gate
 
 ```bash
 python -m scripts.check_promotion
 ```
 
-A passing candidate returns exit code `0`.
-
-A failing candidate returns exit code `1`.
-
-This allows the same command to be used as a future CI/CD quality gate.
+```text
+PASS → exit code 0
+FAIL → exit code 1
+```
 
 ---
 
-# 📊 MLflow
+# 📊 MLflow Workflow
 
 Log experiments:
 
@@ -1092,23 +1151,23 @@ Start MLflow:
 python -m mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
 ```
 
-Open:
-
-```text
-http://127.0.0.1:5000
-```
-
-Register an approved model:
+Register the approved candidate:
 
 ```bash
 python -m scripts.register_model
 ```
 
+Promote an approved candidate to the production alias:
+
+```bash
+python -m scripts.promote_to_production
+```
+
 ---
 
-# 🔥 Run Load Tests
+# 🔥 Load Testing
 
-Start Locust:
+Interactive Locust:
 
 ```bash
 python -m locust \
@@ -1116,13 +1175,13 @@ python -m locust \
   --host http://127.0.0.1:8000
 ```
 
-Then open:
+Open:
 
 ```text
 http://localhost:8089
 ```
 
-A reproducible headless run can also be executed with:
+Example headless run:
 
 ```bash
 python -m locust \
@@ -1139,7 +1198,7 @@ python -m locust \
 
 # 🔐 Repository Hygiene
 
-Large/generated/local artifacts are intentionally excluded from Git:
+Large, generated, private, and local-state artifacts are intentionally excluded:
 
 ```text
 models/
@@ -1154,273 +1213,196 @@ __pycache__/
 
 This prevents:
 
-- model binaries from bloating Git history
+- large model binaries from bloating Git history
 - evaluation datasets from being accidentally committed
 - local MLflow state from entering source control
 - secrets from being exposed
-- Python-generated bytecode from polluting commits
+- generated Python bytecode from polluting commits
 
 ---
 
-# 💡 Key Engineering Lessons Demonstrated
+# 💡 Engineering Principles Demonstrated
 
-This project intentionally focuses on the parts of ML engineering that happen **after a model exists**.
+### 1. Model accuracy is only one dimension
 
-### 1. Model accuracy is only one part of production ML
-
-A production model also needs:
+Production ML also requires:
 
 ```text
+quality
 latency
 throughput
-memory/storage efficiency
+artifact size
 reliability
 observability
-versioning
 testing
-deployment safety
+versioning
+release safety
 ```
 
 ### 2. Faster does not automatically mean better
 
-INT8 was substantially faster and smaller, but it was not promoted until its quality was evaluated.
+INT8 was substantially faster and smaller, but promotion was blocked until its quality was measured.
 
 ```text
 Optimize
    ↓
-Measure
+Benchmark
    ↓
-Evaluate quality
+Evaluate
    ↓
-Apply promotion gate
+Apply Gates
    ↓
 Register
+   ↓
+Promote
 ```
 
 ### 3. Tail latency matters
 
-Average latency alone can hide poor user experiences.
-
-Therefore the project records:
+The project measures:
 
 ```text
+average
 p50
 p95
 p99
 ```
 
-rather than relying only on averages.
+rather than relying only on average latency.
 
-### 4. ML and product policy should be separate
-
-The classifier predicts probabilities.
-
-The policy engine decides how those probabilities affect a particular user.
+### 4. Prediction and policy are separate
 
 ```text
-ML prediction ≠ product decision
+Model Probability
+       ≠
+Product Decision
 ```
 
-### 5. Model releases need gates
+This allows personalized moderation without retraining the classifier for every user's preferences.
 
-A new model should not reach deployment merely because training/export completed successfully.
+### 5. Model releases need measurable gates
 
-It should satisfy measurable requirements first.
+Candidate models must satisfy explicit quality and performance requirements before receiving a production alias.
 
-### 6. Reproducibility matters
+### 6. Observability must include ML behavior
 
-Benchmarks and evaluations write results to machine-readable artifacts rather than relying solely on screenshots or manually copied numbers.
+Traditional API metrics alone do not explain model behavior.
+
+The platform therefore monitors both:
+
+```text
+Service Metrics
++
+Inference Metrics
++
+Moderation Metrics
++
+Feedback Metrics
+```
+
+### 7. Reproducibility matters
+
+Evaluation results, benchmark outputs, dashboard configuration, promotion criteria, and CI configuration are represented as code or machine-readable artifacts rather than relying only on screenshots and manual notes.
 
 ---
 
-# 🔮 Future Scope
+# 🌟 Why This Is More Than a Model Demo
 
-The architecture can be extended into a larger social-media moderation platform.
-
-Potential additions include:
-
-### Real-Time Social Media Integration
-
-Moderate:
-
-- post comments
-- story replies
-- live-stream chats
-- community messages
-
-### Streaming Architecture
-
-For very high traffic:
+A basic ML demo often looks like:
 
 ```text
-Social Platform
+Load pretrained model
       ↓
-Kafka / Event Stream
+predict()
       ↓
-Moderation Workers
-      ↓
-ONNX Runtime
-      ↓
-Moderation Decision
+REST endpoint
 ```
 
-### Monitoring
-
-Add:
+This project instead implements:
 
 ```text
-Prometheus
-    ↓
-Grafana
-```
-
-for:
-
-- request latency
-- inference latency
-- error rates
-- throughput
-- category distributions
-- model confidence
-- moderation decision rates
-
-### Drift Detection
-
-Monitor changes in:
-
-```text
-language patterns
-toxicity distributions
-model confidence
-user feedback
-false positives
-false negatives
-```
-
-### Automated Retraining
-
-```text
-Production Predictions
-        ↓
-Human Feedback
-        ↓
-Validated Dataset
-        ↓
-Retraining Pipeline
-        ↓
-Candidate Model
-        ↓
-Evaluation
-        ↓
-Promotion Gate
-        ↓
-Registry
-        ↓
-Deployment
-```
-
-### Champion / Challenger Deployment
-
-Future model versions could be evaluated against the current production model before receiving a production alias.
-
----
-
-# 🌟 What Makes This Project Different?
-
-This is intentionally **not**:
-
-```text
-Load model
-→ call predict()
-→ put it behind Flask
-→ done
-```
-
-Instead, it treats ML as a complete production system:
-
-```text
-                    DATA
-                     ↓
-                 ML MODEL
-                     ↓
-                  SERVING
-                     ↓
-                PERSISTENCE
-                     ↓
-                 FEEDBACK
-                     ↓
-               EVALUATION
-                     ↓
-               OPTIMIZATION
-                     ↓
-                BENCHMARKING
-                     ↓
-             EXPERIMENT TRACKING
-                     ↓
-               QUALITY GATES
-                     ↓
-                MODEL REGISTRY
-                     ↓
-                    CI/CD
-                     ↓
-                 MONITORING
-                     ↓
-                 RETRAINING
+                       DATA
+                        ↓
+                    ML MODEL
+                        ↓
+                  OPTIMIZATION
+                        ↓
+                   EVALUATION
+                        ↓
+                  BENCHMARKING
+                        ↓
+                PROMOTION GATES
+                        ↓
+               EXPERIMENT TRACKING
+                        ↓
+                 MODEL REGISTRY
+                        ↓
+               PRODUCTION ALIAS
+                        ↓
+                     SERVING
+                        ↓
+                   PERSISTENCE
+                        ↓
+                    FEEDBACK
+                        ↓
+                  OBSERVABILITY
+                        ↓
+                 FUTURE RETRAINING
 ```
 
 The central engineering question is not simply:
 
-> **“Can the model classify toxic text?”**
+> **Can a Transformer detect toxic text?**
 
 It is:
 
-> **“Can we build a measurable, reproducible, personalized, performant, and safely upgradable ML system around that model?”**
-
-That is the purpose of this project.
+> **Can we build a measurable, personalized, reproducible, optimized, observable, and safely upgradable ML system around it?**
 
 ---
 
-# 📌 Current Project Status
+# 📌 Project Status
 
-Implemented:
+## Implemented
 
-- [x] Toxic-BERT inference
-- [x] Multi-label toxicity classification
-- [x] Personalized moderation preferences
-- [x] Policy engine
+- [x] Toxic-BERT multi-label inference
+- [x] Personalized moderation policies
 - [x] FastAPI serving
 - [x] PostgreSQL persistence
 - [x] SQLAlchemy ORM
 - [x] Alembic migrations
 - [x] Prediction history
-- [x] Human feedback collection
-- [x] Automated tests
-- [x] Dockerized application
-- [x] Locust load testing
-- [x] PyTorch baseline benchmarking
+- [x] Human feedback pipeline
+- [x] PyTorch baseline
 - [x] ONNX export
-- [x] PyTorch/ONNX prediction comparison
+- [x] PyTorch vs. ONNX validation
 - [x] ONNX Runtime optimization
 - [x] INT8 quantization
-- [x] Reproducible performance benchmarking
+- [x] Reproducible latency benchmarking
 - [x] 5,000-comment quality evaluation
 - [x] Precision / Recall / F1 evaluation
 - [x] Automated model promotion gate
 - [x] MLflow experiment tracking
 - [x] MLflow Model Registry
-- [x] Registered/versioned candidate model
+- [x] Versioned candidate model
+- [x] Gated `@production` model promotion
+- [x] Docker / Docker Compose
+- [x] Automated test suite
 - [x] GitHub Actions CI
+- [x] Locust load testing
+- [x] Prometheus instrumentation
+- [x] ML-specific production telemetry
+- [x] Grafana monitoring dashboard
+- [x] Provisioned monitoring configuration
 
-In progress / future:
+## Future Extensions
 
-- [ ] Production monitoring
-- [ ] Prometheus metrics
-- [ ] Grafana dashboards
 - [ ] Drift detection
 - [ ] Automated retraining
-- [ ] Model-release CI/CD
-- [ ] Cloud deployment
 - [ ] Champion/challenger rollout
+- [ ] Remote artifact registry
+- [ ] Cloud deployment
+- [ ] Model-release CI/CD
+- [ ] Streaming moderation with Kafka/event queues
 
 ---
 
@@ -1428,29 +1410,22 @@ In progress / future:
 
 Automated toxicity classifiers are imperfect.
 
-Language is contextual, culturally dependent, and constantly evolving. Sarcasm, reclaimed language, slang, quotations, and friendly banter can all produce unexpected predictions.
+Language is contextual, culturally dependent, and constantly evolving. Sarcasm, quotations, reclaimed language, slang, and friendly banter can all produce unexpected predictions.
 
-For example, a phrase intended as praise can sometimes receive a high toxicity score when context is missing.
+For this reason, the platform includes:
 
-For this reason, this project intentionally includes:
-
-- configurable moderation policy
+- configurable user policies
 - human feedback
 - per-category evaluation
-- model-quality gates
+- explicit model-quality gates
 - model versioning
-- future monitoring/retraining hooks
+- production telemetry
+- future retraining hooks
 
-High-impact moderation systems should not treat a model probability as unquestionable ground truth.
-
----
-
-# 📄 License
-
-Add the license appropriate for your intended use.
+Model probabilities should not be treated as unquestionable ground truth, particularly in high-impact moderation decisions.
 
 ---
 
 # 👨‍💻 Author
 
-Built as an end-to-end **Machine Learning Engineering / MLOps portfolio project** exploring how modern NLP models can be optimized, evaluated, versioned, served, monitored, and safely promoted in a production-oriented architecture.
+Built as an end-to-end **Machine Learning Engineering / MLOps portfolio project** exploring how modern NLP models can be optimized, evaluated, benchmarked, versioned, served, monitored, and safely promoted through a production-oriented model lifecycle.
